@@ -1,0 +1,24 @@
+{
+  "name": "Folio",
+  "short_name": "Folio",
+  "description": "Lire, annoter au stylet, signer et transformer vos PDF. Optimisé pour l'étude.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#232529",
+  "theme_color": "#232529",
+  "lang": "fr",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/logo.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "file_handlers": [
+    { "action": "./", "accept": { "application/pdf": [".pdf"] } }
+  ],
+  "launch_handler": { "client_mode": "focus-existing" },
+  "categories": ["productivity", "education", "utilities"]
+}
