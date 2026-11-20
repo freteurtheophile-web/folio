@@ -46,7 +46,7 @@ Avec Folio ouvert, dans la console du navigateur (F12) :
 const t = await import('/tests/selftest.js'); await t.run();
 ```
 
-126 vérifications : stylets et pression, gomme, lasso, texte, notes, formes, signatures, pages,
+135 vérifications : stylets et pression, gomme, lasso, texte, notes, formes, signatures, pages,
 enregistrement et réouverture, impression, tous les outils PDF, OCR, dictionnaire, traduction, mode étude.
 
 ## Contenu

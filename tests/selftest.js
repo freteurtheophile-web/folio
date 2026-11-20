@@ -5,6 +5,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const results = [];
 const ok = (name, cond, info = '') => { results.push({ name, ok: !!cond, info: String(info) }); };
 async function step(name, fn) {
+  window.__selftestStep = name; // progression visible pendant l'exécution
   try { await fn(); } catch (e) { results.push({ name, ok: false, info: 'EXCEPTION ' + (e?.message || e) }); console.error(name, e); }
 }
 const app = () => window.folio;
@@ -258,6 +259,30 @@ export async function run({ skipNetwork = false } = {}) {
     an.markupFromRects('underline', '#d0342c', rects, 'x');
     an.markupFromRects('strike', '#d0342c', rects, 'x');
     ok('Souligner et barrer', count(4, 'markup') === 3);
+  });
+
+  await step('Sélection au stylet et au doigt', async () => {
+    v.clearSel(); an.setTool('select'); await sleep(100);
+    const span = [...v.pages[4].textLayer.querySelectorAll('span:not(.markedContent)')].find(s => s.textContent.trim().length > 12);
+    const r = span.getBoundingClientRect(), y = r.top + r.height / 2;
+    const fire = (type, x, pt, id) => span.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerType: pt, pointerId: id, isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, pressure: 0.5 }));
+    ok('Texte non géré par le navigateur au toucher', getComputedStyle(span.closest('.textLayer')).touchAction === 'none');
+    fire('pointerdown', r.left + 4, 'pen', 701);
+    for (let i = 1; i <= 4; i++) fire('pointermove', r.left + 4 + (r.width * 0.7) * i / 4, 'pen', 701);
+    fire('pointerup', r.left + r.width * 0.7, 'pen', 701); await sleep(100);
+    const penSel = getSelection().toString();
+    ok('Stylet : glisser sélectionne des mots entiers', penSel.length > 3 && penSel === penSel.trim(), penSel);
+    ok('Stylet : menu Folio avec Définition et Étymologie', !!document.querySelector('.selpop button[title="Étymologie"]') && !!document.querySelector('.selpop button[title="Définition"]'));
+    v.clearSel(); an.lastPenAt = 0;
+    fire('pointerdown', r.left + r.width / 2, 'touch', 702); await sleep(1200); fire('pointerup', r.left + r.width / 2, 'touch', 702); await sleep(100);
+    const word = getSelection().toString();
+    ok('Doigt : appui long sélectionne le mot', /^[\p{L}\p{N}'’-]+$/u.test(word), word);
+    ok('Doigt : menu Folio affiché', !!document.querySelector('.selpop'));
+    const cm = new MouseEvent('contextmenu', { bubbles: true, cancelable: true }); span.dispatchEvent(cm);
+    ok('Pas de menu système après le doigt', cm.defaultPrevented);
+    fire('pointerdown', r.left + 10, 'touch', 703); fire('pointerup', r.left + 10, 'touch', 703); await sleep(100);
+    ok('Doigt : toucher efface la sélection', getSelection().isCollapsed && !document.querySelector('.selpop'));
+    an.lastDownType = 'mouse';
   });
 
   // --- Navigation, zoom, recherche, signets ---

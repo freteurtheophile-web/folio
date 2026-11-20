@@ -268,24 +268,37 @@ export class Annotator {
     host.addEventListener('pointermove', this._move);
     host.addEventListener('pointerup', this._up);
     host.addEventListener('pointercancel', this._up);
-    host.addEventListener('contextmenu', (e) => { if (this.tool !== 'select') e.preventDefault(); });
+    // Menu système (copier, rechercher…) : seulement au clic droit de la souris.
+    host.addEventListener('contextmenu', (e) => { if (this.tool !== 'select' || this.lastDownType !== 'mouse') e.preventDefault(); });
+    // Doigt sur le texte avec l'outil Sélection : pas d'appui long natif (Folio sélectionne lui-même).
+    host.addEventListener('touchstart', (e) => {
+      if (this.tool === 'select' && e.target.closest?.('.textLayer') && !e.target.closest('a, .link')) e.preventDefault();
+    }, { passive: false });
   }
   attachPages() {}
 
   onDown(e) {
     const pg = this.pageAt(e.target);
+    this.lastDownType = e.pointerType;
     if (e.pointerType === 'pen') this.lastPenAt = Date.now();
     if (!pg) return;
 
     // Outil sélection : clic sur un trait / une forme / un surlignage dessiné.
     if (this.tool === 'select') {
-      if (e.target.closest('.obj, .selbox, .link')) return;
+      if (e.target.closest('.obj, .selbox, .link, a')) return;
       const hit = this.hitTest(pg.i, this.toPdf(pg, e), e.pointerType === 'mouse' ? 4 : 8);
       if (hit) {
         e.preventDefault(); e.stopPropagation();
         this.select(pg.i, hit.id);
         this.startMove(e, pg);
-      } else this.clearSelection();
+        return;
+      }
+      this.clearSelection();
+      // Doigt ou stylet sur le texte : sélection gérée par Folio (glisser au stylet, appui long au doigt).
+      if (e.pointerType !== 'mouse' && e.target.closest('.textLayer')) {
+        if (e.pointerType === 'touch' && Date.now() - this.lastPenAt < 1500) return; // paume
+        this.view.startTextSel(e);
+      }
       return;
     }
     if (!e.target.classList.contains('live')) return;

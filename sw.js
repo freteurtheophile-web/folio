@@ -1,5 +1,5 @@
 // Service worker : met l'application en cache pour fonctionner hors ligne.
-const CACHE = 'folio-v4';
+const CACHE = 'folio-v5';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/ui.js', 'js/store.js', 'js/pdf.js', 'js/viewer.js', 'js/annot.js', 'js/ink.js',

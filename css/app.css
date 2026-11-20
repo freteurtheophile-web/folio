@@ -86,6 +86,8 @@ input[type=color] { width: 34px; height: 30px; border: 0; padding: 0; background
   display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 10px; flex: none;
   background: var(--bg); border-bottom: 1px solid var(--line);
   padding-left: max(10px, env(titlebar-area-x, 0px));
+  /* Appli installée : on laisse la place aux boutons réduire / agrandir / fermer de Windows. */
+  padding-right: max(10px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)));
   -webkit-app-region: drag; app-region: drag;
 }
 .topbar button, .topbar .tabs { -webkit-app-region: no-drag; app-region: no-drag; }
@@ -273,7 +275,14 @@ input[type=color] { width: 34px; height: 30px; border: 0; padding: 0; background
 .zoom-label:hover { background: var(--high); }
 
 /* Sélection de texte : mini-barre */
-.selpop { position: fixed; z-index: 50; display: flex; align-items: center; gap: 2px; padding: 5px 6px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); }
+.selpop { position: fixed; z-index: 50; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px; padding: 5px 6px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); max-width: calc(100vw - 16px); box-sizing: border-box; }
+/* Outil Sélection au doigt ou au stylet : Folio gère lui-même la sélection (pas de menu système). */
+.docview.tool-select .textLayer { touch-action: none; -webkit-touch-callout: none; }
+@media (any-pointer: coarse) {
+  .selpop { gap: 4px; padding: 6px 8px; }
+  .selpop .ibtn { width: 42px; height: 42px; }
+  .selpop .dot { width: 28px; height: 28px; }
+}
 .selpop .dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(0,0,0,.15); cursor: pointer; margin: 0 2px; padding: 0; }
 .selpop .ibtn { width: 32px; height: 32px; }
 
@@ -396,19 +405,27 @@ body.focus .topbar, body.focus .annot-host, body.focus .statusbar, body.focus .s
 
 /* --- Petits écrans (téléphone) --- */
 @media (max-width: 760px) {
-  .topbar { height: 50px; padding: 0 6px; }
+  .topbar { height: 50px; padding-left: max(6px, env(titlebar-area-x, 0px)); padding-right: max(6px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))); }
   .brand span { display: none; }
   .save-btn span { display: none; }
   .sidebar { position: absolute; z-index: 20; top: 0; bottom: 0; left: 0; width: 230px; box-shadow: var(--shadow); }
   .rpanel.open { position: absolute; right: 0; top: 0; bottom: 0; width: min(92vw, 360px); z-index: 25; box-shadow: var(--shadow); }
-  .annot-bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .annot-bar { padding: 4px 4px; }
   .wslider { width: 80px; }
   .tgroup { padding: 0 3px; }
   .tbtn { width: 38px; height: 38px; }
   .statusbar .ibtn[title^="Affichage deux"], .statusbar .ibtn[title^="Ajuster"] { display: none; }
+  .statusbar { overflow: hidden; padding: 0 4px; }
   .grid3, .grid4 { grid-template-columns: 1fr 1fr; }
   .pages { padding: 10px 8px 40vh; }
   .hero h1 { font-size: 21px; }
   .study-panel, .pen-panel { width: calc(100vw - 16px); }
   .modal-body, .modal-head, .modal-foot { padding-left: 16px; padding-right: 16px; }
+}
+
+/* --- Téléphone en portrait : barre d'outils sur une ligne qui défile (barre de défilement visible) --- */
+@media (max-width: 520px) {
+  .annot-bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--amber) transparent; padding-bottom: 2px; }
+  /* Zoom au pincement : les boutons zoom et pivoter laissent la place aux pages. */
+  .statusbar .ibtn[title^="Zoom"], .statusbar .ibtn[title^="Pivoter"] { display: none; }
 }

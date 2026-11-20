@@ -689,6 +689,112 @@ export class DocView {
     this.scroller.addEventListener('pointercancel', end);
   }
 
+  // --- Sélection de texte au doigt / au stylet ---------------------------------
+  // Stylet : glisser sur le texte sélectionne. Doigt : glisser fait défiler, un appui
+  // long sélectionne le mot, puis glisser étend la sélection. Aucun menu système.
+  caretAt(x, y) {
+    const p = document.caretPositionFromPoint?.(x, y);
+    const c = p ? { node: p.offsetNode, off: p.offset } : (() => { const r = document.caretRangeFromPoint?.(x, y); return r && { node: r.startContainer, off: r.startOffset }; })();
+    return c && c.node?.nodeType === 3 && c.node.parentElement?.closest('.textLayer') && this.pagesEl.contains(c.node) ? c : null;
+  }
+
+  wordAt(c) {
+    const t = c.node.data, isW = (ch) => /[\p{L}\p{N}'’\-]/u.test(ch);
+    let a = c.off, b = c.off;
+    if (!isW(t[a] || '') && a > 0 && isW(t[a - 1])) a = b = a - 1;
+    if (!isW(t[a] || '')) return null;
+    while (a > 0 && isW(t[a - 1])) a--;
+    while (b < t.length && isW(t[b])) b++;
+    return { node: c.node, a, b };
+  }
+
+  startTextSel(e) {
+    const sel = document.getSelection(), sc = this.scroller;
+    if (this._tsel) { this._tsel.cancel(); return; } // deuxième doigt : on laisse le zoom au pincement
+    const pen = e.pointerType === 'pen';
+    const st = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, mode: 'wait', anchor: null, word: null, vx: 0, vy: 0, t: performance.now() };
+    this._tsel = st;
+    this.hideSelPop();
+    try { e.target.setPointerCapture(e.pointerId); } catch {}
+    e.preventDefault();
+
+    if (pen) {
+      st.anchor = this.caretAt(e.clientX, e.clientY);
+      st.mode = st.anchor ? 'drag' : 'pan';
+      sel.removeAllRanges();
+    } else {
+      st.timer = setTimeout(() => {
+        if (st.mode !== 'wait') return;
+        const c = this.caretAt(st.x0, st.y0), w = c && this.wordAt(c);
+        if (!w) { st.mode = 'pan'; return; }
+        st.mode = 'word'; st.word = w;
+        sel.setBaseAndExtent(w.node, w.a, w.node, w.b);
+        if (navigator.userActivation?.hasBeenActive) navigator.vibrate?.(12);
+      }, 450);
+    }
+
+    const before = (n1, o1, n2, o2) => { // (n1,o1) est-il avant (n2,o2) ?
+      if (n1 === n2) return o1 < o2;
+      return !!(n1.compareDocumentPosition(n2) & Node.DOCUMENT_POSITION_FOLLOWING);
+    };
+    const move = (ev) => {
+      if (ev.pointerId !== st.id) return;
+      if (this.pinching) { st.cancel(); return; }
+      const dx = ev.clientX - st.x, dy = ev.clientY - st.y, now = performance.now(), dt = Math.max(1, now - st.t);
+      st.x = ev.clientX; st.y = ev.clientY; st.t = now;
+      if (st.mode === 'wait' && Math.hypot(st.x - st.x0, st.y - st.y0) > 10) { st.mode = 'pan'; clearTimeout(st.timer); }
+      if (st.mode === 'pan') {
+        sc.scrollLeft -= dx; sc.scrollTop -= dy;
+        st.vx = 0.8 * (dx / dt) + 0.2 * st.vx; st.vy = 0.8 * (dy / dt) + 0.2 * st.vy;
+      } else if (st.mode === 'drag' || st.mode === 'word') {
+        const f = this.caretAt(ev.clientX, ev.clientY);
+        if (f) {
+          if (st.mode === 'drag') {
+            // Au stylet, la sélection s'aligne sur des mots entiers.
+            const fwd = !before(f.node, f.off, st.anchor.node, st.anchor.off);
+            const wa = this.wordAt(st.anchor), wf = this.wordAt(f);
+            const a = wa ? { node: wa.node, off: fwd ? wa.a : wa.b } : st.anchor;
+            const b = wf ? { node: wf.node, off: fwd ? wf.b : wf.a } : f;
+            sel.setBaseAndExtent(a.node, a.off, b.node, b.off);
+          }
+          else {
+            const w = st.word, wf = this.wordAt(f);
+            if (before(f.node, f.off, w.node, w.a)) sel.setBaseAndExtent(w.node, w.b, f.node, wf ? wf.a : f.off);
+            else if (before(w.node, w.b, f.node, f.off)) sel.setBaseAndExtent(w.node, w.a, f.node, wf ? wf.b : f.off);
+            else sel.setBaseAndExtent(w.node, w.a, w.node, w.b);
+          }
+        }
+        // Défilement automatique près des bords.
+        const r = sc.getBoundingClientRect();
+        if (ev.clientY < r.top + 40) sc.scrollTop -= 12; else if (ev.clientY > r.bottom - 40) sc.scrollTop += 12;
+      }
+    };
+    const finish = () => {
+      clearTimeout(st.timer);
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+      if (this._tsel === st) this._tsel = null;
+    };
+    st.cancel = () => { st.mode = 'none'; finish(); };
+    const up = (ev) => {
+      if (ev.pointerId !== st.id) return;
+      const mode = st.mode;
+      finish();
+      if (mode === 'drag' || mode === 'word') { setTimeout(() => this.onSelectionChange(true), 0); return; }
+      if (mode === 'wait') { sel.removeAllRanges(); this.hideSelPop(); return; } // simple toucher
+      if (mode === 'pan' && Math.hypot(st.vx, st.vy) > 0.2 && performance.now() - st.t < 80) {
+        // Inertie du défilement.
+        let vx = st.vx * 16, vy = st.vy * 16;
+        const step = () => {
+          if (this._tsel || Math.hypot(vx, vy) < 0.5) return;
+          sc.scrollLeft -= vx; sc.scrollTop -= vy; vx *= 0.95; vy *= 0.95;
+          requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      }
+    };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+  }
+
   // --- Sélection de texte --------------------------------------------------
   onSelectionChange(fromUp = false) {
     const sel = document.getSelection();
