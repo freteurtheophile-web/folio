@@ -387,10 +387,42 @@ class App {
 
   // Ouverture via « Ouvrir avec Folio » (application installée).
   handleLaunchQueue() {
+    // « Partager → Folio » (Android) : fichiers déposés par le service worker.
+    this.checkShared();
     if (!('launchQueue' in window)) return;
     window.launchQueue.setConsumer(async (params) => {
       for (const h of params.files || []) await this.openFile(await h.getFile(), h);
+      if (params.targetURL && /[?&]shared=/.test(params.targetURL)) this.checkShared();
     });
+  }
+
+  async checkShared() {
+    if (!('caches' in window) || this._sharing) return;
+    this._sharing = true;
+    try {
+      const cache = await caches.open('folio-share');
+      const keys = await cache.keys();
+      for (const req of keys) {
+        const res = await cache.match(req);
+        if (!res) continue;
+        if (res.headers.get('X-Link')) {
+          await cache.delete(req);
+          const link = (await res.text()).trim();
+          toast(link
+            ? 'Un lien a été partagé, pas le fichier. Dans Google Drive, utilisez ⋮ → « Envoyer une copie » puis Folio.'
+            : 'Aucun fichier reçu.', 'error', 8000);
+          continue;
+        }
+        const name = decodeURIComponent(res.headers.get('X-Name') || 'document.pdf');
+        const blob = await res.blob();
+        await this.openFile(new File([blob], name, { type: res.headers.get('Content-Type') || blob.type }));
+        await cache.delete(req); // seulement une fois ouvert : rien ne se perd si la page change entre-temps
+      }
+    } catch (e) { toast('Impossible d\'ouvrir le fichier partagé : ' + e.message, 'error'); }
+    finally {
+      this._sharing = false;
+      if (/[?&]shared=/.test(location.search)) history.replaceState(null, '', location.pathname);
+    }
   }
 }
 
